@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetProbe - Multi-Network Discovery Hub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e4e4e4;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            color: #00d9ff;
+            text-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+        }
+
+        header p {
+            color: #888;
+            margin-top: 8px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .panel-header h2 {
+            color: #00d9ff;
+            font-size: 1.1rem;
+        }
+
+        /* Credentials Panel */
+        .credentials-panel {
+            background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 153, 204, 0.1) 100%);
+            border-color: rgba(0, 217, 255, 0.3);
+        }
+
+        .credentials-row {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .input-group label {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        input[type="text"], input[type="password"], input[type="number"] {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #fff;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #00d9ff;
+            box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+        }
+
+        button {
+            background: linear-gradient(135deg, #00d9ff 0%, #0099cc 100%);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 24px;
+            color: #000;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 217, 255, 0.4);
+        }
+
+        button:disabled {
+            background: #444;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e4e4e4;
+        }
+
+        button.secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        button.success {
+            background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .status-indicator.ready {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+        }
+
+        .status-indicator.not-ready {
+            background: rgba(255, 170, 0, 0.2);
+            color: #ffaa00;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Network Interfaces */
+        .interfaces-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 10px;
+        }
+
+        .interface-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .interface-name {
+            font-weight: 600;
+            color: #00d9ff;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+
+        .interface-details {
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        /* Scan Controls */
+        .scan-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-top: 15px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar.active {
+            display: block;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 8px;
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-card .number {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #00d9ff;
+        }
+
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* Device Cards */
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 15px;
+        }
+
+        .device-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .device-card:hover {
+            border-color: #00d9ff;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .device-card.has-info {
+            border-color: rgba(0, 255, 136, 0.3);
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .device-ip {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .device-hostname {
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        .ssh-badge {
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .ssh-badge.available {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid #00ff88;
+        }
+
+        .ssh-badge.unavailable {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+            border: 1px solid #ff4444;
+        }
+
+        .device-info {
+            display: grid;
+            gap: 6px;
+            font-size: 0.85rem;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .info-label {
+            color: #888;
+        }
+
+        .info-value {
+            color: #e4e4e4;
+            text-align: right;
+        }
+
+        .device-actions {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 8px;
+        }
+
+        .device-actions button {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.85rem;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1a1a2e;
+            border-radius: 15px;
+            padding: 25px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid rgba(0, 217, 255, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #00d9ff;
+            font-size: 1.3rem;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .close-btn:hover {
+            color: #fff;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .info-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .info-section h3 {
+            color: #00d9ff;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-item .label {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        .info-item .value {
+            color: #e4e4e4;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .data-table th, .data-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-table th {
+            color: #888;
+            font-weight: 500;
+        }
+
+        .gpu-section {
+            border: 1px solid rgba(118, 185, 0, 0.3);
+            background: rgba(118, 185, 0, 0.05);
+        }
+
+        .gpu-section h3 {
+            color: #76b900;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+        }
+
+        .spinner {
+            width: 35px;
+            height: 35px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00d9ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(255, 68, 68, 0.2);
+            border: 1px solid #ff4444;
+            border-radius: 6px;
+            padding: 12px;
+            color: #ff4444;
+            margin-bottom: 12px;
+        }
+
+        .no-devices {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .filter-btn.active {
+            background: rgba(0, 217, 255, 0.2);
+            color: #00d9ff;
+            border-color: #00d9ff;
+        }
+
+        /* GPU info in device cards */
+        .gpu-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: rgba(118, 185, 0, 0.2);
+            color: #76b900;
+            border: 1px solid #76b900;
+            margin-top: 4px;
+        }
+
+        .gpu-info-mini {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(118, 185, 0, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(118, 185, 0, 0.2);
+        }
+
+        .gpu-info-mini .gpu-name {
+            font-size: 0.8rem;
+            color: #76b900;
+            font-weight: 600;
+        }
+
+        .gpu-info-mini .gpu-vram {
+            font-size: 0.75rem;
+            color: #aaa;
+        }
+
+        /* System group colors - for multi-interface detection */
+        .device-card.system-group-0 { border-left: 4px solid #ff6b6b; }
+        .device-card.system-group-1 { border-left: 4px solid #4ecdc4; }
+        .device-card.system-group-2 { border-left: 4px solid #ffe66d; }
+        .device-card.system-group-3 { border-left: 4px solid #95e1d3; }
+        .device-card.system-group-4 { border-left: 4px solid #f38181; }
+        .device-card.system-group-5 { border-left: 4px solid #aa96da; }
+        .device-card.system-group-6 { border-left: 4px solid #fcbad3; }
+        .device-card.system-group-7 { border-left: 4px solid #a8d8ea; }
+
+        .system-group-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            margin-left: 8px;
+        }
+
+        .system-group-indicator.group-0 { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+        .system-group-indicator.group-1 { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; }
+        .system-group-indicator.group-2 { background: rgba(255, 230, 109, 0.2); color: #ffe66d; }
+        .system-group-indicator.group-3 { background: rgba(149, 225, 211, 0.2); color: #95e1d3; }
+        .system-group-indicator.group-4 { background: rgba(243, 129, 129, 0.2); color: #f38181; }
+        .system-group-indicator.group-5 { background: rgba(170, 150, 218, 0.2); color: #aa96da; }
+        .system-group-indicator.group-6 { background: rgba(252, 186, 211, 0.2); color: #fcbad3; }
+        .system-group-indicator.group-7 { background: rgba(168, 216, 234, 0.2); color: #a8d8ea; }
+
+        /* Scan All SSH button */
+        .scan-all-btn {
+            background: linear-gradient(135deg, #ff9f43 0%, #ee5a24 100%);
+        }
+
+        .scan-all-progress {
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        @media (max-width: 768px) {
+            .credentials-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .devices-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>NetProbe</h1>
+            <p>Multi-Network Discovery Hub</p>
+        </header>
+
+        <!-- SSH Credentials Panel -->
+        <div class="panel credentials-panel">
+            <div class="panel-header">
+                <h2>SSH Credentials</h2>
+                <span class="status-indicator" id="credStatus">
+                    <span class="status-dot"></span>
+                    <span id="credStatusText">Not Configured</span>
+                </span>
+            </div>
+            <div class="credentials-row">
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="globalUsername" placeholder="root" style="width: 180px;">
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="globalPassword" placeholder="SSH password" style="width: 200px;">
+                </div>
+                <button onclick="saveCredentials()" class="success">Save Credentials</button>
+                <p style="color: #888; font-size: 0.85rem; margin-left: 10px;">
+                    These credentials will be used for all SSH connections
+                </p>
+            </div>
+        </div>
+
+        <!-- Network Interfaces Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Server Network Interfaces</h2>
+                <span id="interfaceCount" style="color: #888; font-size: 0.85rem;"></span>
+            </div>
+            <div class="interfaces-grid" id="interfacesContainer">
+                <div class="loading"><div class="spinner"></div>Loading interfaces...</div>
+            </div>
+        </div>
+
+        <!-- Scan Controls -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Network Scan</h2>
+                <span class="last-scan" id="lastScan" style="color: #888; font-size: 0.85rem;"></span>
+            </div>
+            <div class="scan-controls">
+                <button id="quickScanBtn" onclick="quickScan()" class="secondary">Quick Scan (ARP only)</button>
+                <button id="fullScanBtn" onclick="fullScan()">Full Scan (Ping + ARP)</button>
+            </div>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText"></div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="number" id="totalDevices">0</div>
+                <div class="label">Total Devices</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="sshDevices">0</div>
+                <div class="label">SSH Available</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="scannedDevices">0</div>
+                <div class="label">Info Retrieved</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="gpuDevices">0</div>
+                <div class="label">With GPU</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="groupedDevices">0</div>
+                <div class="label">Multi-IF Systems</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="networkCount">0</div>
+                <div class="label">Networks</div>
+            </div>
+        </div>
+
+        <!-- Devices -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Discovered Devices</h2>
+            </div>
+            <div class="filter-bar">
+                <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+                <button class="filter-btn" data-filter="ssh" onclick="setFilter('ssh')">SSH Only</button>
+                <button class="filter-btn" data-filter="scanned" onclick="setFilter('scanned')">With Info</button>
+                <button class="filter-btn" data-filter="grouped" onclick="setFilter('grouped')">Grouped Systems</button>
+                <div style="flex-grow: 1;"></div>
+                <button id="scanAllSshBtn" onclick="scanAllSSH()" class="scan-all-btn">Scan All SSH Systems</button>
+            </div>
+            <div id="scanAllProgress" class="scan-all-progress" style="display: none;"></div>
+            <div id="devicesContainer" class="devices-grid">
+                <div class="no-devices">
+                    <p>No devices found. Run a scan to discover devices on all connected networks.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Info Modal -->
+    <div class="modal" id="deviceModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>System Information - <span id="modalDeviceIp"></span></h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+
+            <div id="errorMessage" class="error" style="display: none;"></div>
+
+            <div id="loadingSection" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Connecting via SSH and gathering system information...</p>
+            </div>
+
+            <div id="systemInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        let devices = [];
+        let interfaces = [];
+        let deviceInfo = {};
+        let currentFilter = 'all';
+        let pollInterval = null;
+        let systemGroups = {}; // Maps hostname to group index
+        let isScanningSsh = false;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCredentials();
+            loadInterfaces();
+            loadDevices();
+        });
+
+        // Compute total VRAM for a device from its GPU info
+        function getTotalVRAM(info) {
+            if (!info || !info.gpu_available || !info.gpu_info || info.gpu_info.length === 0) {
+                return null;
+            }
+            let totalMB = 0;
+            for (const gpu of info.gpu_info) {
+                // memory_total is like "24576 MiB" or "24 GB"
+                const memStr = gpu.memory_total || '';
+                const match = memStr.match(/(\d+(?:\.\d+)?)\s*(MiB|MB|GiB|GB)/i);
+                if (match) {
+                    let value = parseFloat(match[1]);
+                    const unit = match[2].toLowerCase();
+                    if (unit === 'gib' || unit === 'gb') {
+                        value *= 1024;
+                    }
+                    totalMB += value;
+                }
+            }
+            if (totalMB >= 1024) {
+                return (totalMB / 1024).toFixed(1) + ' GB';
+            }
+            return totalMB + ' MB';
+        }
+
+        // Get GPU summary for display in card
+        function getGpuSummary(info) {
+            if (!info || !info.gpu_available || !info.gpu_info || info.gpu_info.length === 0) {
+                return null;
+            }
+            const gpus = info.gpu_info;
+            const totalVram = getTotalVRAM(info);
+
+            // Count GPUs by name
+            const gpuCounts = {};
+            for (const gpu of gpus) {
+                const name = gpu.name || 'Unknown GPU';
+                gpuCounts[name] = (gpuCounts[name] || 0) + 1;
+            }
+
+            const gpuList = Object.entries(gpuCounts).map(([name, count]) => {
+                return count > 1 ? `${count}x ${name}` : name;
+            });
+
+            return {
+                names: gpuList,
+                totalVram: totalVram,
+                count: gpus.length
+            };
+        }
+
+        // Detect systems with multiple network interfaces (same physical machine)
+        function detectSystemGroups() {
+            systemGroups = {};
+            const hostnameToIPs = {};
+
+            // Group devices by hostname from system info
+            for (const device of devices) {
+                const info = deviceInfo[device.ip];
+                if (info && info.hostname) {
+                    const hostname = info.hostname.toLowerCase();
+                    if (!hostnameToIPs[hostname]) {
+                        hostnameToIPs[hostname] = [];
+                    }
+                    hostnameToIPs[hostname].push(device.ip);
+                }
+            }
+
+            // Assign group indices only to hostnames with multiple IPs
+            let groupIndex = 0;
+            for (const [hostname, ips] of Object.entries(hostnameToIPs)) {
+                if (ips.length > 1) {
+                    for (const ip of ips) {
+                        systemGroups[ip] = groupIndex;
+                    }
+                    groupIndex = (groupIndex + 1) % 8; // 8 colors
+                }
+            }
+
+            return hostnameToIPs;
+        }
+
+        // Sort devices: SSH first, then grouped by system
+        function sortDevices(deviceList) {
+            // First detect system groups
+            const hostnameToIPs = detectSystemGroups();
+
+            // Create a sorting key for each device
+            return [...deviceList].sort((a, b) => {
+                // First priority: SSH available
+                if (a.ssh_available && !b.ssh_available) return -1;
+                if (!a.ssh_available && b.ssh_available) return 1;
+
+                // Second priority: Group by hostname (same system together)
+                const infoA = deviceInfo[a.ip];
+                const infoB = deviceInfo[b.ip];
+                const hostnameA = infoA?.hostname?.toLowerCase() || '';
+                const hostnameB = infoB?.hostname?.toLowerCase() || '';
+
+                // If both have hostnames, sort by hostname to group same systems
+                if (hostnameA && hostnameB) {
+                    if (hostnameA < hostnameB) return -1;
+                    if (hostnameA > hostnameB) return 1;
+                }
+
+                // Third priority: Devices with info before those without
+                if (infoA && !infoB) return -1;
+                if (!infoA && infoB) return 1;
+
+                // Fourth priority: By IP address
+                const ipA = a.ip.split('.').map(n => parseInt(n));
+                const ipB = b.ip.split('.').map(n => parseInt(n));
+                for (let i = 0; i < 4; i++) {
+                    if (ipA[i] !== ipB[i]) return ipA[i] - ipB[i];
+                }
+                return 0;
+            });
+        }
+
+        async function loadCredentials() {
+            try {
+                const response = await fetch('/api/credentials');
+                const data = await response.json();
+                document.getElementById('globalUsername').value = data.username || '';
+                updateCredentialStatus(data.username && data.has_password);
+            } catch (error) {
+                console.error('Error loading credentials:', error);
+            }
+        }
+
+        async function saveCredentials() {
+            const username = document.getElementById('globalUsername').value;
+            const password = document.getElementById('globalPassword').value;
+
+            if (!username || !password) {
+                alert('Please enter both username and password');
+                return;
+            }
+
+            try {
+                await fetch('/api/credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                updateCredentialStatus(true);
+                document.getElementById('globalPassword').value = '';
+                document.getElementById('globalPassword').placeholder = '******** (saved)';
+            } catch (error) {
+                console.error('Error saving credentials:', error);
+            }
+        }
+
+        function updateCredentialStatus(ready) {
+            const status = document.getElementById('credStatus');
+            const text = document.getElementById('credStatusText');
+            if (ready) {
+                status.className = 'status-indicator ready';
+                text.textContent = 'Ready';
+            } else {
+                status.className = 'status-indicator not-ready';
+                text.textContent = 'Not Configured';
+            }
+        }
+
+        async function loadInterfaces() {
+            try {
+                const response = await fetch('/api/interfaces');
+                const data = await response.json();
+                interfaces = data.interfaces;
+                renderInterfaces();
+            } catch (error) {
+                console.error('Error loading interfaces:', error);
+            }
+        }
+
+        function renderInterfaces() {
+            const container = document.getElementById('interfacesContainer');
+            document.getElementById('interfaceCount').textContent = `${interfaces.length} interface(s)`;
+            document.getElementById('networkCount').textContent = interfaces.length;
+
+            if (interfaces.length === 0) {
+                container.innerHTML = '<p style="color: #888;">No network interfaces found</p>';
+                return;
+            }
+
+            container.innerHTML = interfaces.map(iface => `
+                <div class="interface-card">
+                    <div class="interface-name">${iface.name}</div>
+                    <div class="interface-details">
+                        <div>IP: ${iface.ip}</div>
+                        <div>Network: ${iface.network}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                devices = data.devices || [];
+                if (data.last_scan) {
+                    document.getElementById('lastScan').textContent = `Last scan: ${data.last_scan}`;
+                }
+
+                // Also load cached device info from server
+                await loadCachedDeviceInfo();
+
+                renderDevices();
+            } catch (error) {
+                console.error('Error loading devices:', error);
+            }
+        }
+
+        async function loadCachedDeviceInfo() {
+            try {
+                const response = await fetch('/api/devices/ssh');
+                const data = await response.json();
+                // Extract cached system info from SSH devices
+                for (const device of (data.devices || [])) {
+                    if (device.system_info) {
+                        deviceInfo[device.ip] = device.system_info;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading cached device info:', error);
+            }
+        }
+
+        async function quickScan() {
+            startScan(false);
+        }
+
+        async function fullScan() {
+            startScan(true);
+        }
+
+        async function startScan(pingSweep) {
+            document.getElementById('quickScanBtn').disabled = true;
+            document.getElementById('fullScanBtn').disabled = true;
+            document.getElementById('progressBar').classList.add('active');
+            document.getElementById('progressText').textContent = pingSweep ?
+                'Starting full scan (ping sweep + ARP)...' : 'Starting quick scan (ARP table)...';
+
+            try {
+                await fetch(pingSweep ? '/api/scan' : '/api/scan/quick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ping_sweep: pingSweep })
+                });
+
+                pollInterval = setInterval(pollScanStatus, 500);
+            } catch (error) {
+                console.error('Error starting scan:', error);
+                resetScanButtons();
+            }
+        }
+
+        async function pollScanStatus() {
+            try {
+                const response = await fetch('/api/scan/status');
+                const data = await response.json();
+
+                if (data.total > 0) {
+                    const percent = (data.progress / data.total) * 100;
+                    document.getElementById('progressFill').style.width = `${percent}%`;
+                    document.getElementById('progressText').textContent =
+                        `Checking SSH: ${data.progress} / ${data.total} (${data.devices.filter(d => d.ssh_available).length} with SSH)`;
+                }
+
+                devices = data.devices || [];
+                interfaces = data.interfaces || interfaces;
+                renderDevices();
+                renderInterfaces();
+
+                if (!data.is_scanning) {
+                    clearInterval(pollInterval);
+                    resetScanButtons();
+                    if (data.last_scan) {
+                        document.getElementById('lastScan').textContent = `Last scan: ${data.last_scan}`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling:', error);
+            }
+        }
+
+        function resetScanButtons() {
+            document.getElementById('quickScanBtn').disabled = false;
+            document.getElementById('fullScanBtn').disabled = false;
+            document.getElementById('progressBar').classList.remove('active');
+            document.getElementById('progressText').textContent = '';
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+            renderDevices();
+        }
+
+        function renderDevices() {
+            const container = document.getElementById('devicesContainer');
+
+            // Sort devices first (this also updates systemGroups)
+            let sortedDevices = sortDevices(devices);
+
+            let filtered = sortedDevices;
+            if (currentFilter === 'ssh') {
+                filtered = sortedDevices.filter(d => d.ssh_available);
+            } else if (currentFilter === 'scanned') {
+                filtered = sortedDevices.filter(d => deviceInfo[d.ip]);
+            } else if (currentFilter === 'grouped') {
+                // Only show devices that are part of a system group (multi-interface)
+                filtered = sortedDevices.filter(d => systemGroups[d.ip] !== undefined);
+            }
+
+            // Update stats
+            document.getElementById('totalDevices').textContent = devices.length;
+            document.getElementById('sshDevices').textContent = devices.filter(d => d.ssh_available).length;
+            document.getElementById('scannedDevices').textContent = Object.keys(deviceInfo).length;
+
+            // Count devices with GPUs
+            const gpuCount = Object.values(deviceInfo).filter(info => info.gpu_available).length;
+            document.getElementById('gpuDevices').textContent = gpuCount;
+
+            // Count grouped systems (unique hostnames with multiple IPs)
+            const groupedCount = Object.keys(systemGroups).length;
+            const uniqueGroups = new Set(Object.values(systemGroups)).size;
+            document.getElementById('groupedDevices').textContent = uniqueGroups > 0 ? `${uniqueGroups} (${groupedCount} IPs)` : '0';
+
+            if (filtered.length === 0) {
+                let message = 'No devices found. Run a scan to discover devices.';
+                if (devices.length > 0) {
+                    if (currentFilter === 'grouped') {
+                        message = 'No multi-interface systems detected. Scan SSH systems to detect devices with multiple network interfaces.';
+                    } else {
+                        message = 'No devices match the current filter.';
+                    }
+                }
+                container.innerHTML = `
+                    <div class="no-devices">
+                        <p>${message}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(device => {
+                const info = deviceInfo[device.ip];
+                const gpuSummary = getGpuSummary(info);
+                const groupIndex = systemGroups[device.ip];
+                const hasGroup = groupIndex !== undefined;
+                const groupClass = hasGroup ? `system-group-${groupIndex}` : '';
+
+                // Get the actual hostname from system info if available
+                const displayHostname = info?.hostname || device.hostname || 'Unknown';
+
+                return `
+                <div class="device-card ${info ? 'has-info' : ''} ${groupClass}">
+                    <div class="device-header">
+                        <div>
+                            <div class="device-ip">${device.ip}${hasGroup ? `<span class="system-group-indicator group-${groupIndex}">Multi-IF</span>` : ''}</div>
+                            <div class="device-hostname">${displayHostname}</div>
+                        </div>
+                        <span class="ssh-badge ${device.ssh_available ? 'available' : 'unavailable'}">
+                            ${device.ssh_available ? `SSH :${device.ssh_port}` : 'No SSH'}
+                        </span>
+                    </div>
+                    <div class="device-info">
+                        <div class="info-row">
+                            <span class="info-label">MAC</span>
+                            <span class="info-value">${device.mac}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Network</span>
+                            <span class="info-value">${device.interface_ip || 'N/A'}</span>
+                        </div>
+                        ${device.ssh_banner ? `
+                        <div class="info-row">
+                            <span class="info-label">SSH</span>
+                            <span class="info-value" style="font-size: 0.8rem;">${device.ssh_banner.substring(0, 30)}</span>
+                        </div>
+                        ` : ''}
+                        ${info ? `
+                        <div class="info-row">
+                            <span class="info-label">OS</span>
+                            <span class="info-value" style="font-size: 0.8rem;">${info.os_version || 'N/A'}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ${gpuSummary ? `
+                    <div class="gpu-info-mini">
+                        <div class="gpu-name">${gpuSummary.names.join(', ')}</div>
+                        <div class="gpu-vram">Total VRAM: ${gpuSummary.totalVram} (${gpuSummary.count} GPU${gpuSummary.count > 1 ? 's' : ''})</div>
+                    </div>
+                    ` : ''}
+                    ${device.ssh_available ? `
+                    <div class="device-actions">
+                        <button onclick="getDeviceInfo('${device.ip}')" class="success">
+                            ${info ? 'Refresh Info' : 'Get System Info'}
+                        </button>
+                        ${info ? `
+                        <button onclick="showDeviceInfo('${device.ip}')" class="secondary">View</button>
+                        ` : ''}
+                    </div>
+                    ` : ''}
+                </div>
+            `}).join('');
+        }
+
+        async function getDeviceInfo(ip) {
+            document.getElementById('modalDeviceIp').textContent = ip;
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('loadingSection').style.display = 'block';
+            document.getElementById('systemInfo').innerHTML = '';
+            document.getElementById('deviceModal').classList.add('active');
+
+            try {
+                const response = await fetch(`/api/device/${ip}/info`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                document.getElementById('loadingSection').style.display = 'none';
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    try {
+                        const errData = JSON.parse(text);
+                        showError(errData.error || `Server error (${response.status})`);
+                    } catch {
+                        showError(`Server error (${response.status}): ${text.substring(0, 100)}`);
+                    }
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.info) {
+                    deviceInfo[ip] = data.info;
+                    displaySystemInfo(data.info);
+                    renderDevices();
+                } else {
+                    showError(data.error || 'Failed to connect to device. Check SSH credentials and connectivity.');
+                }
+            } catch (error) {
+                document.getElementById('loadingSection').style.display = 'none';
+                showError('Connection error: ' + error.message);
+            }
+        }
+
+        function showDeviceInfo(ip) {
+            if (deviceInfo[ip]) {
+                document.getElementById('modalDeviceIp').textContent = ip;
+                document.getElementById('errorMessage').style.display = 'none';
+                document.getElementById('loadingSection').style.display = 'none';
+                displaySystemInfo(deviceInfo[ip]);
+                document.getElementById('deviceModal').classList.add('active');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('deviceModal').classList.remove('active');
+        }
+
+        // Scan all SSH-available systems
+        async function scanAllSSH() {
+            if (isScanningSsh) return;
+
+            const sshDevices = devices.filter(d => d.ssh_available);
+            if (sshDevices.length === 0) {
+                alert('No SSH-available devices found. Run a network scan first.');
+                return;
+            }
+
+            isScanningSsh = true;
+            const btn = document.getElementById('scanAllSshBtn');
+            const progressDiv = document.getElementById('scanAllProgress');
+            btn.disabled = true;
+            btn.textContent = 'Scanning...';
+            progressDiv.style.display = 'block';
+
+            let completed = 0;
+            let success = 0;
+            let failed = 0;
+
+            for (const device of sshDevices) {
+                progressDiv.innerHTML = `Scanning ${completed + 1}/${sshDevices.length}: <strong>${device.ip}</strong> (${device.hostname || 'Unknown'})... Success: ${success}, Failed: ${failed}`;
+
+                try {
+                    const response = await fetch(`/api/device/${device.ip}/info`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.info) {
+                            deviceInfo[device.ip] = data.info;
+                            success++;
+                        } else {
+                            failed++;
+                        }
+                    } else {
+                        failed++;
+                    }
+                } catch (error) {
+                    console.error(`Error scanning ${device.ip}:`, error);
+                    failed++;
+                }
+
+                completed++;
+                renderDevices(); // Update display after each device
+            }
+
+            progressDiv.innerHTML = `Scan complete: ${success} successful, ${failed} failed, ${sshDevices.length} total`;
+
+            // Hide progress after a delay
+            setTimeout(() => {
+                progressDiv.style.display = 'none';
+            }, 5000);
+
+            btn.disabled = false;
+            btn.textContent = 'Scan All SSH Systems';
+            isScanningSsh = false;
+
+            // Re-render to show system groups
+            renderDevices();
+        }
+
+        function showError(message) {
+            const el = document.getElementById('errorMessage');
+            el.textContent = message;
+            el.style.display = 'block';
+        }
+
+        function displaySystemInfo(info) {
+            const container = document.getElementById('systemInfo');
+
+            if (!info) {
+                container.innerHTML = '<div class="error">No system information available</div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="info-section">
+                    <h3>System Overview</h3>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="label">Hostname</span><span class="value">${info.hostname || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">OS</span><span class="value">${info.os_version || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Kernel</span><span class="value">${info.kernel || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Uptime</span><span class="value">${info.uptime || 'N/A'}</span></div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>CPU</h3>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="label">Model</span><span class="value">${info.cpu_info || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Cores</span><span class="value">${info.cpu_cores || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Usage</span><span class="value">${info.cpu_usage || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Load</span><span class="value">${info.load_average || 'N/A'}</span></div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Memory</h3>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="label">Total</span><span class="value">${info.memory_total || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Used</span><span class="value">${info.memory_used || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Free</span><span class="value">${info.memory_free || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Usage</span><span class="value">${info.memory_percent || 'N/A'}</span></div>
+                    </div>
+                </div>
+
+                ${info.disk_info && info.disk_info.length > 0 ? `
+                <div class="info-section">
+                    <h3>Storage</h3>
+                    <table class="data-table">
+                        <thead><tr><th>Device</th><th>Size</th><th>Used</th><th>Avail</th><th>%</th><th>Mount</th></tr></thead>
+                        <tbody>
+                            ${info.disk_info.map(d => `<tr><td>${d.device||'N/A'}</td><td>${d.size||'N/A'}</td><td>${d.used||'N/A'}</td><td>${d.available||'N/A'}</td><td>${d.percent||'N/A'}</td><td>${d.mount||'N/A'}</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ` : ''}
+
+                ${info.network_interfaces && info.network_interfaces.length > 0 ? `
+                <div class="info-section">
+                    <h3>Network Interfaces</h3>
+                    <table class="data-table">
+                        <thead><tr><th>Interface</th><th>IP Address</th></tr></thead>
+                        <tbody>
+                            ${info.network_interfaces.map(n => `<tr><td>${n.interface}</td><td>${n.ip}</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ` : ''}
+
+                ${info.gpu_available ? `
+                <div class="info-section gpu-section">
+                    <h3>NVIDIA GPU</h3>
+                    <div class="info-grid" style="margin-bottom: 12px;">
+                        <div class="info-item"><span class="label">Driver</span><span class="value">${info.nvidia_driver || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">CUDA</span><span class="value">${info.cuda_version || 'N/A'}</span></div>
+                    </div>
+                    ${info.gpu_info && info.gpu_info.length > 0 ? `
+                    <table class="data-table">
+                        <thead><tr><th>GPU</th><th>Name</th><th>Memory</th><th>Util</th><th>Temp</th><th>Power</th><th>CUDA Cap</th></tr></thead>
+                        <tbody>
+                            ${info.gpu_info.map(g => `<tr>
+                                <td>${g.index}</td>
+                                <td>${g.name}</td>
+                                <td>${g.memory_used} / ${g.memory_total}</td>
+                                <td>${g.gpu_utilization || 'N/A'}</td>
+                                <td>${g.temperature || 'N/A'}</td>
+                                <td>${g.power_draw || 'N/A'}</td>
+                                <td>${g.cuda_compute_capability || 'N/A'}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                    ` : ''}
+                </div>
+                ` : ''}
+
+                <div class="info-section">
+                    <h3>Additional</h3>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="label">Logged Users</span><span class="value">${info.logged_users || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Processes</span><span class="value">${info.processes || 'N/A'}</span></div>
+                    </div>
+                </div>
+
+                ${info.services && info.services.length > 0 ? `
+                <div class="info-section">
+                    <h3>Running Services</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${info.services.map(s => `<span style="background: rgba(0,217,255,0.2); padding: 4px 10px; border-radius: 12px; font-size: 0.8rem;">${s}</span>`).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            `;
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+        document.getElementById('deviceModal').addEventListener('click', e => { if (e.target.id === 'deviceModal') closeModal(); });
+    </script>
+</body>
+</html>
