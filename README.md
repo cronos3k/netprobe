@@ -170,15 +170,59 @@ curl -X POST http://localhost:5000/api/v1/execute \
 
 ## Configuration
 
-### SSH Credentials
+### Global SSH Credentials
 
-Credentials are stored locally in `data.json` (gitignored). Set them via the web UI or API:
+Set default credentials used for all devices via the web UI or API:
 
 ```bash
 curl -X POST http://localhost:5000/api/credentials \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "yourpassword"}'
 ```
+
+### Per-Device Credentials
+
+Each device can have its own SSH credentials, overriding the global defaults. Click the "Settings" button on any device card to:
+
+- Set custom username/password for that specific device
+- Install an SSH key for passwordless authentication
+- View current authentication method
+
+**API:**
+```bash
+# Set per-device credentials
+curl -X POST http://localhost:5000/api/device/192.168.1.100/credentials \
+  -H "Content-Type: application/json" \
+  -d '{"username": "specialuser", "password": "devicepass"}'
+
+# Clear custom credentials (revert to global)
+curl -X DELETE http://localhost:5000/api/device/192.168.1.100/credentials
+```
+
+### SSH Key Authentication
+
+For passwordless authentication, NetProbe can generate and install SSH keys:
+
+1. Open device settings by clicking "Settings" on a device card
+2. Enter username/password (needed once for key installation)
+3. Click "Install SSH Key"
+4. Future connections will use key-based auth automatically
+
+**API:**
+```bash
+# Generate SSH key pair (if not exists)
+curl -X POST http://localhost:5000/api/ssh/key
+
+# Get public key
+curl http://localhost:5000/api/ssh/key
+
+# Install key on a device
+curl -X POST http://localhost:5000/api/device/192.168.1.100/install-key \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "password"}'
+```
+
+Keys are stored in `ssh_keys/` directory (gitignored).
 
 ### Data Persistence
 
@@ -195,6 +239,7 @@ netprobe/
 ├── ssh_client.py       # SSH connection and system info gathering
 ├── templates/
 │   └── index.html      # Single-page web application
+├── ssh_keys/           # Generated SSH keys (gitignored)
 ├── requirements.txt    # Python dependencies
 ├── run.bat             # Windows launcher
 └── data.json           # Credentials and cached data (gitignored)

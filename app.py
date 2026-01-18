@@ -5,7 +5,10 @@ Flask server providing REST API and web interface for network discovery and GPU 
 
 from flask import Flask, render_template, jsonify, request
 from scanner import scan_network, get_all_network_interfaces, get_arp_table
-from ssh_client import get_device_info
+from ssh_client import (
+    get_device_info, install_ssh_key, generate_ssh_key,
+    get_public_key, has_ssh_key, SSHClient
+)
 import threading
 import time
 import json
@@ -43,12 +46,15 @@ credentials = {
 # Cached system info for devices
 device_system_info = {}
 
+# Per-device credentials: {ip: {username, password, use_key}}
+device_credentials = {}
+
 scan_lock = threading.Lock()
 
 
 def load_data():
     """Load persisted data from file"""
-    global credentials, device_system_info
+    global credentials, device_system_info, device_credentials
     try:
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r') as f:
@@ -56,6 +62,7 @@ def load_data():
                 credentials['username'] = data.get('username', '')
                 credentials['password'] = data.get('password', '')
                 device_system_info.update(data.get('device_info', {}))
+                device_credentials.update(data.get('device_credentials', {}))
     except Exception as e:
         print(f"Error loading data: {e}")
 
@@ -66,12 +73,26 @@ def save_data():
         data = {
             'username': credentials['username'],
             'password': credentials['password'],
-            'device_info': device_system_info
+            'device_info': device_system_info,
+            'device_credentials': device_credentials
         }
         with open(DATA_FILE, 'w') as f:
             json.dump(data, f, indent=2)
     except Exception as e:
         print(f"Error saving data: {e}")
+
+
+def get_device_creds(ip: str) -> tuple:
+    """Get credentials for a device - per-device if set, else global.
+    Returns (username, password, use_key)"""
+    if ip in device_credentials:
+        creds = device_credentials[ip]
+        return (
+            creds.get('username') or credentials['username'],
+            creds.get('password') or credentials['password'],
+            creds.get('use_key', False)
+        )
+    return credentials['username'], credentials['password'], False
 
 
 def progress_callback(completed: int, total: int):
@@ -217,21 +238,25 @@ def get_ssh_devices():
 @app.route('/api/device/<ip>/info', methods=['GET', 'POST'])
 def get_device_details(ip):
     """Get detailed system info via SSH"""
-    # Use stored credentials or provided ones
+    # Get per-device credentials or fall back to global
+    dev_user, dev_pass, use_key = get_device_creds(ip)
+
+    # Override with provided credentials if any
     if request.method == 'POST':
         try:
             data = request.get_json(silent=True) or {}
         except Exception:
             data = {}
-        username = data.get('username') or credentials['username']
-        password = data.get('password') or credentials['password']
+        username = data.get('username') or dev_user
+        password = data.get('password') or dev_pass
         port = data.get('port')
+        use_key = data.get('use_key', use_key)
     else:
-        username = credentials['username']
-        password = credentials['password']
+        username = dev_user
+        password = dev_pass
         port = None
 
-    if not username or not password:
+    if not username or (not password and not use_key):
         return jsonify({'error': 'No credentials provided. Set credentials first.'}), 400
 
     # Find the device to get SSH port
@@ -249,7 +274,7 @@ def get_device_details(ip):
     ssh_port = port or device.get('ssh_port', 22)
 
     try:
-        info = get_device_info(ip, ssh_port, username, password)
+        info = get_device_info(ip, ssh_port, username, password, use_key)
         if info:
             # Cache the system info
             device_system_info[ip] = info
@@ -259,6 +284,107 @@ def get_device_details(ip):
             return jsonify({'error': 'Failed to connect via SSH. Check credentials.'}), 401
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/device/<ip>/credentials', methods=['GET', 'POST', 'DELETE'])
+def device_credentials_endpoint(ip):
+    """Manage per-device SSH credentials"""
+    if request.method == 'GET':
+        if ip in device_credentials:
+            creds = device_credentials[ip]
+            return jsonify({
+                'has_custom': True,
+                'username': creds.get('username', ''),
+                'has_password': bool(creds.get('password')),
+                'use_key': creds.get('use_key', False)
+            })
+        return jsonify({
+            'has_custom': False,
+            'username': credentials['username'],
+            'has_password': bool(credentials['password']),
+            'use_key': False
+        })
+
+    elif request.method == 'POST':
+        data = request.get_json() or {}
+        device_credentials[ip] = {
+            'username': data.get('username', ''),
+            'password': data.get('password', ''),
+            'use_key': data.get('use_key', False)
+        }
+        save_data()
+        return jsonify({'status': 'saved'})
+
+    elif request.method == 'DELETE':
+        if ip in device_credentials:
+            del device_credentials[ip]
+            save_data()
+        return jsonify({'status': 'deleted'})
+
+
+@app.route('/api/ssh/key', methods=['GET', 'POST'])
+def ssh_key_endpoint():
+    """Manage SSH key - generate or get public key"""
+    if request.method == 'GET':
+        if has_ssh_key():
+            return jsonify({
+                'has_key': True,
+                'public_key': get_public_key()
+            })
+        return jsonify({'has_key': False})
+
+    elif request.method == 'POST':
+        # Generate new key
+        private_path, public_key = generate_ssh_key()
+        return jsonify({
+            'success': True,
+            'public_key': public_key
+        })
+
+
+@app.route('/api/device/<ip>/install-key', methods=['POST'])
+def install_key_on_device(ip):
+    """Install SSH public key on a device for passwordless auth"""
+    # Need password to install key initially
+    dev_user, dev_pass, _ = get_device_creds(ip)
+
+    data = request.get_json(silent=True) or {}
+    username = data.get('username') or dev_user
+    password = data.get('password') or dev_pass
+
+    if not username or not password:
+        return jsonify({'error': 'Password required to install SSH key'}), 400
+
+    # Find SSH port
+    ssh_port = 22
+    with scan_lock:
+        for d in scan_state['devices']:
+            if d['ip'] == ip and d.get('ssh_port'):
+                ssh_port = d['ssh_port']
+                break
+
+    # Generate key if not exists
+    if not has_ssh_key():
+        generate_ssh_key()
+
+    # Install key on remote host
+    success, message = install_ssh_key(ip, ssh_port, username, password)
+
+    if success:
+        # Mark device as using key auth
+        if ip not in device_credentials:
+            device_credentials[ip] = {}
+        device_credentials[ip]['use_key'] = True
+        device_credentials[ip]['username'] = username
+        save_data()
+
+        return jsonify({
+            'success': True,
+            'message': message,
+            'public_key': get_public_key()
+        })
+    else:
+        return jsonify({'error': message}), 500
 
 
 @app.route('/api/device/<ip>/refresh', methods=['POST'])

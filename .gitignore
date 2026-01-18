@@ -19,6 +19,7 @@ ENV/
 
 # Private data - NEVER commit these
 data.json
+ssh_keys/
 
 # OS files
 .DS_Store

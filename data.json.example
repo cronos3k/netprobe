@@ -1,5 +1,6 @@
 {
   "username": "",
   "password": "",
-  "device_info": {}
+  "device_info": {},
+  "device_credentials": {}
 }

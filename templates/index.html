@@ -596,6 +596,101 @@
             color: #888;
         }
 
+        /* SSH Key badge */
+        .key-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            background: rgba(155, 89, 182, 0.2);
+            color: #9b59b6;
+            border: 1px solid #9b59b6;
+            margin-left: 6px;
+        }
+
+        /* Settings button */
+        .settings-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            color: #888;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .settings-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Settings modal form */
+        .settings-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .settings-form .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .settings-form label {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .settings-form input[type="text"],
+        .settings-form input[type="password"] {
+            width: 100%;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #00d9ff;
+        }
+
+        .public-key-display {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            word-break: break-all;
+            color: #aaa;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .btn-purple {
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+        }
+
         @media (max-width: 768px) {
             .credentials-row {
                 flex-direction: column;
@@ -736,14 +831,66 @@
         </div>
     </div>
 
+    <!-- Device Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Device Settings - <span id="settingsDeviceIp"></span></h2>
+                <button class="close-btn" onclick="closeSettingsModal()">&times;</button>
+            </div>
+
+            <div class="settings-form">
+                <div class="info-section">
+                    <h3>SSH Credentials</h3>
+                    <p style="font-size: 0.8rem; color: #888; margin-bottom: 12px;">
+                        Set custom credentials for this device, or leave empty to use global credentials.
+                    </p>
+                    <div class="input-group">
+                        <label>Username</label>
+                        <input type="text" id="deviceUsername" placeholder="Leave empty for global">
+                    </div>
+                    <div class="input-group" style="margin-top: 10px;">
+                        <label>Password</label>
+                        <input type="password" id="devicePassword" placeholder="Leave empty for global">
+                    </div>
+                    <div class="btn-row" style="margin-top: 15px;">
+                        <button onclick="saveDeviceCredentials()" class="success">Save Credentials</button>
+                        <button onclick="clearDeviceCredentials()" class="btn-danger">Clear Custom</button>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>SSH Key Authentication</h3>
+                    <p style="font-size: 0.8rem; color: #888; margin-bottom: 12px;">
+                        Install an SSH key for passwordless authentication. Requires initial password.
+                    </p>
+                    <div id="sshKeyStatus"></div>
+                    <div class="btn-row" style="margin-top: 15px;">
+                        <button onclick="installSshKey()" class="btn-purple">Install SSH Key</button>
+                        <button onclick="generateSshKey()" class="secondary">Generate New Key</button>
+                    </div>
+                    <div id="publicKeyDisplay" style="margin-top: 10px; display: none;">
+                        <label style="font-size: 0.8rem; color: #888;">Public Key:</label>
+                        <div class="public-key-display" id="publicKeyContent"></div>
+                    </div>
+                </div>
+
+                <div id="settingsMessage" class="error" style="display: none;"></div>
+                <div id="settingsSuccess" style="display: none; background: rgba(0,255,136,0.2); border: 1px solid #00ff88; border-radius: 6px; padding: 12px; color: #00ff88;"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let devices = [];
         let interfaces = [];
         let deviceInfo = {};
+        let deviceCreds = {}; // Per-device credential info
         let currentFilter = 'all';
         let pollInterval = null;
         let systemGroups = {}; // Maps hostname to group index
         let isScanningSsh = false;
+        let currentSettingsIp = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -1112,16 +1259,27 @@
                 // Get the actual hostname from system info if available
                 const displayHostname = info?.hostname || device.hostname || 'Unknown';
 
+                const creds = deviceCreds[device.ip];
+                const usesKey = creds?.use_key || false;
+                const hasCustomCreds = creds?.has_custom || false;
+
                 return `
                 <div class="device-card ${info ? 'has-info' : ''} ${groupClass}">
                     <div class="device-header">
                         <div>
-                            <div class="device-ip">${device.ip}${hasGroup ? `<span class="system-group-indicator group-${groupIndex}">Multi-IF</span>` : ''}</div>
+                            <div class="device-ip">
+                                ${device.ip}
+                                ${hasGroup ? `<span class="system-group-indicator group-${groupIndex}">Multi-IF</span>` : ''}
+                                ${usesKey ? `<span class="key-badge">KEY</span>` : ''}
+                            </div>
                             <div class="device-hostname">${displayHostname}</div>
                         </div>
-                        <span class="ssh-badge ${device.ssh_available ? 'available' : 'unavailable'}">
-                            ${device.ssh_available ? `SSH :${device.ssh_port}` : 'No SSH'}
-                        </span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            ${device.ssh_available ? `<button class="settings-btn" onclick="openSettingsModal('${device.ip}')" title="Device Settings">Settings</button>` : ''}
+                            <span class="ssh-badge ${device.ssh_available ? 'available' : 'unavailable'}">
+                                ${device.ssh_available ? `SSH :${device.ssh_port}` : 'No SSH'}
+                            </span>
+                        </div>
                     </div>
                     <div class="device-info">
                         <div class="info-row">
@@ -1142,6 +1300,12 @@
                         <div class="info-row">
                             <span class="info-label">OS</span>
                             <span class="info-value" style="font-size: 0.8rem;">${info.os_version || 'N/A'}</span>
+                        </div>
+                        ` : ''}
+                        ${hasCustomCreds ? `
+                        <div class="info-row">
+                            <span class="info-label">Auth</span>
+                            <span class="info-value" style="font-size: 0.8rem;">${usesKey ? 'SSH Key' : 'Custom Password'}</span>
                         </div>
                         ` : ''}
                     </div>
@@ -1219,6 +1383,177 @@
 
         function closeModal() {
             document.getElementById('deviceModal').classList.remove('active');
+        }
+
+        // Device Settings Modal Functions
+        async function openSettingsModal(ip) {
+            currentSettingsIp = ip;
+            document.getElementById('settingsDeviceIp').textContent = ip;
+            document.getElementById('settingsModal').classList.add('active');
+            document.getElementById('settingsMessage').style.display = 'none';
+            document.getElementById('settingsSuccess').style.display = 'none';
+
+            // Load device credentials
+            try {
+                const response = await fetch(`/api/device/${ip}/credentials`);
+                const data = await response.json();
+                deviceCreds[ip] = data;
+
+                document.getElementById('deviceUsername').value = data.has_custom ? data.username : '';
+                document.getElementById('devicePassword').value = '';
+
+                // Update SSH key status
+                updateSshKeyStatus(data.use_key);
+            } catch (error) {
+                console.error('Error loading device credentials:', error);
+            }
+
+            // Load SSH key info
+            try {
+                const response = await fetch('/api/ssh/key');
+                const data = await response.json();
+                if (data.has_key) {
+                    document.getElementById('publicKeyDisplay').style.display = 'block';
+                    document.getElementById('publicKeyContent').textContent = data.public_key;
+                } else {
+                    document.getElementById('publicKeyDisplay').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading SSH key:', error);
+            }
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('active');
+            currentSettingsIp = null;
+        }
+
+        function updateSshKeyStatus(useKey) {
+            const statusEl = document.getElementById('sshKeyStatus');
+            if (useKey) {
+                statusEl.innerHTML = '<span class="key-badge">SSH Key Enabled</span> This device uses key-based authentication.';
+            } else {
+                statusEl.innerHTML = 'Key authentication not configured for this device.';
+            }
+        }
+
+        async function saveDeviceCredentials() {
+            if (!currentSettingsIp) return;
+
+            const username = document.getElementById('deviceUsername').value;
+            const password = document.getElementById('devicePassword').value;
+            const useKey = deviceCreds[currentSettingsIp]?.use_key || false;
+
+            try {
+                const response = await fetch(`/api/device/${currentSettingsIp}/credentials`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, use_key: useKey })
+                });
+
+                if (response.ok) {
+                    showSettingsSuccess('Credentials saved successfully');
+                    deviceCreds[currentSettingsIp] = { has_custom: true, username, use_key: useKey };
+                    renderDevices();
+                } else {
+                    showSettingsError('Failed to save credentials');
+                }
+            } catch (error) {
+                showSettingsError('Error: ' + error.message);
+            }
+        }
+
+        async function clearDeviceCredentials() {
+            if (!currentSettingsIp) return;
+
+            try {
+                const response = await fetch(`/api/device/${currentSettingsIp}/credentials`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showSettingsSuccess('Custom credentials cleared. Using global credentials.');
+                    delete deviceCreds[currentSettingsIp];
+                    document.getElementById('deviceUsername').value = '';
+                    document.getElementById('devicePassword').value = '';
+                    updateSshKeyStatus(false);
+                    renderDevices();
+                }
+            } catch (error) {
+                showSettingsError('Error: ' + error.message);
+            }
+        }
+
+        async function generateSshKey() {
+            try {
+                const response = await fetch('/api/ssh/key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('publicKeyDisplay').style.display = 'block';
+                    document.getElementById('publicKeyContent').textContent = data.public_key;
+                    showSettingsSuccess('SSH key generated successfully');
+                }
+            } catch (error) {
+                showSettingsError('Error generating SSH key: ' + error.message);
+            }
+        }
+
+        async function installSshKey() {
+            if (!currentSettingsIp) return;
+
+            // Need password to install key
+            const username = document.getElementById('deviceUsername').value || document.getElementById('username').value;
+            const password = document.getElementById('devicePassword').value || document.getElementById('password').value;
+
+            if (!username || !password) {
+                showSettingsError('Username and password required to install SSH key');
+                return;
+            }
+
+            showSettingsSuccess('Installing SSH key...');
+
+            try {
+                const response = await fetch(`/api/device/${currentSettingsIp}/install-key`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showSettingsSuccess('SSH key installed! ' + data.message);
+                    deviceCreds[currentSettingsIp] = { ...deviceCreds[currentSettingsIp], use_key: true, username };
+                    updateSshKeyStatus(true);
+
+                    if (data.public_key) {
+                        document.getElementById('publicKeyDisplay').style.display = 'block';
+                        document.getElementById('publicKeyContent').textContent = data.public_key;
+                    }
+                    renderDevices();
+                } else {
+                    showSettingsError(data.error || 'Failed to install SSH key');
+                }
+            } catch (error) {
+                showSettingsError('Error: ' + error.message);
+            }
+        }
+
+        function showSettingsError(message) {
+            const el = document.getElementById('settingsMessage');
+            el.textContent = message;
+            el.style.display = 'block';
+            document.getElementById('settingsSuccess').style.display = 'none';
+        }
+
+        function showSettingsSuccess(message) {
+            const el = document.getElementById('settingsSuccess');
+            el.textContent = message;
+            el.style.display = 'block';
+            document.getElementById('settingsMessage').style.display = 'none';
         }
 
         // Scan all SSH-available systems

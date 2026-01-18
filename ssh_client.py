@@ -1,42 +1,167 @@
 """
 SSH Client Module
 Connects to devices via SSH and retrieves system information
+Supports both password and key-based authentication
 """
 
 import paramiko
 from typing import Dict, Optional
 import re
+import os
+
+
+# Default paths for SSH keys
+SSH_KEY_DIR = os.path.join(os.path.dirname(__file__), 'ssh_keys')
+SSH_PRIVATE_KEY = os.path.join(SSH_KEY_DIR, 'netprobe_key')
+SSH_PUBLIC_KEY = os.path.join(SSH_KEY_DIR, 'netprobe_key.pub')
+
+
+def ensure_ssh_key_dir():
+    """Ensure the SSH key directory exists"""
+    if not os.path.exists(SSH_KEY_DIR):
+        os.makedirs(SSH_KEY_DIR)
+
+
+def generate_ssh_key() -> tuple:
+    """Generate a new SSH key pair if not exists. Returns (private_key_path, public_key_content)"""
+    ensure_ssh_key_dir()
+
+    if os.path.exists(SSH_PRIVATE_KEY) and os.path.exists(SSH_PUBLIC_KEY):
+        # Keys already exist, return public key content
+        with open(SSH_PUBLIC_KEY, 'r') as f:
+            return SSH_PRIVATE_KEY, f.read().strip()
+
+    # Generate new RSA key pair
+    key = paramiko.RSAKey.generate(4096)
+
+    # Save private key
+    key.write_private_key_file(SSH_PRIVATE_KEY)
+
+    # Save public key in OpenSSH format
+    public_key = f"ssh-rsa {key.get_base64()} netprobe@auto-generated"
+    with open(SSH_PUBLIC_KEY, 'w') as f:
+        f.write(public_key + '\n')
+
+    return SSH_PRIVATE_KEY, public_key
+
+
+def get_public_key() -> Optional[str]:
+    """Get the public key content if it exists"""
+    if os.path.exists(SSH_PUBLIC_KEY):
+        with open(SSH_PUBLIC_KEY, 'r') as f:
+            return f.read().strip()
+    return None
+
+
+def has_ssh_key() -> bool:
+    """Check if SSH key pair exists"""
+    return os.path.exists(SSH_PRIVATE_KEY) and os.path.exists(SSH_PUBLIC_KEY)
 
 
 class SSHClient:
-    def __init__(self, host: str, port: int = 22, username: str = "", password: str = ""):
+    def __init__(self, host: str, port: int = 22, username: str = "", password: str = "", use_key: bool = False):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
+        self.use_key = use_key
         self.client = None
         self.os_type = None
 
     def connect(self) -> bool:
-        """Establish SSH connection"""
+        """Establish SSH connection using key or password"""
         try:
             self.client = paramiko.SSHClient()
             self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.client.connect(
-                hostname=self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
-                timeout=10,
-                allow_agent=False,
-                look_for_keys=False
-            )
-            # Detect OS type
-            self._detect_os()
-            return True
+
+            # Try key-based auth first if enabled and key exists
+            if self.use_key and has_ssh_key():
+                try:
+                    pkey = paramiko.RSAKey.from_private_key_file(SSH_PRIVATE_KEY)
+                    self.client.connect(
+                        hostname=self.host,
+                        port=self.port,
+                        username=self.username,
+                        pkey=pkey,
+                        timeout=10,
+                        allow_agent=False,
+                        look_for_keys=False
+                    )
+                    self._detect_os()
+                    return True
+                except Exception as key_error:
+                    print(f"Key auth failed for {self.host}, trying password: {key_error}")
+
+            # Fall back to password auth
+            if self.password:
+                self.client.connect(
+                    hostname=self.host,
+                    port=self.port,
+                    username=self.username,
+                    password=self.password,
+                    timeout=10,
+                    allow_agent=False,
+                    look_for_keys=False
+                )
+                self._detect_os()
+                return True
+
+            return False
         except Exception as e:
             print(f"SSH connection failed to {self.host}: {e}")
             return False
+
+    def copy_ssh_key(self) -> tuple:
+        """Copy the public key to the remote host for future key-based auth.
+        Returns (success: bool, message: str)"""
+        if not has_ssh_key():
+            generate_ssh_key()
+
+        public_key = get_public_key()
+        if not public_key:
+            return False, "Could not read public key"
+
+        if not self.client:
+            return False, "Not connected"
+
+        try:
+            if self.os_type == "linux":
+                # Ensure .ssh directory exists with correct permissions
+                self.execute("mkdir -p ~/.ssh && chmod 700 ~/.ssh")
+
+                # Check if key already exists
+                check_cmd = f'grep -F "{public_key.split()[1]}" ~/.ssh/authorized_keys 2>/dev/null'
+                result = self.execute(check_cmd)
+
+                if public_key.split()[1] in result:
+                    return True, "Key already installed"
+
+                # Append key to authorized_keys
+                escaped_key = public_key.replace('"', '\\"')
+                self.execute(f'echo "{escaped_key}" >> ~/.ssh/authorized_keys')
+                self.execute("chmod 600 ~/.ssh/authorized_keys")
+
+                return True, "Key installed successfully"
+
+            elif self.os_type == "windows":
+                # Windows OpenSSH uses different paths
+                self.execute('if not exist "%USERPROFILE%\\.ssh" mkdir "%USERPROFILE%\\.ssh"')
+
+                # Check if key exists
+                check_result = self.execute(f'findstr /C:"{public_key.split()[1]}" "%USERPROFILE%\\.ssh\\authorized_keys" 2>nul')
+                if public_key.split()[1] in check_result:
+                    return True, "Key already installed"
+
+                # Append key
+                escaped_key = public_key.replace('"', '""')
+                self.execute(f'echo {escaped_key} >> "%USERPROFILE%\\.ssh\\authorized_keys"')
+
+                return True, "Key installed successfully"
+
+            return False, f"Unknown OS type: {self.os_type}"
+
+        except Exception as e:
+            return False, f"Error copying key: {str(e)}"
 
     def _detect_os(self):
         """Detect if the remote system is Linux or Windows"""
@@ -445,14 +570,25 @@ class SSHClient:
             self.client = None
 
 
-def get_device_info(host: str, port: int, username: str, password: str) -> Optional[Dict]:
+def get_device_info(host: str, port: int, username: str, password: str, use_key: bool = False) -> Optional[Dict]:
     """Helper function to get device info via SSH"""
-    client = SSHClient(host, port, username, password)
+    client = SSHClient(host, port, username, password, use_key)
     if client.connect():
         info = client.get_system_info()
         client.disconnect()
         return info
     return None
+
+
+def install_ssh_key(host: str, port: int, username: str, password: str) -> tuple:
+    """Helper function to install SSH key on a remote host.
+    Returns (success: bool, message: str)"""
+    client = SSHClient(host, port, username, password, use_key=False)
+    if client.connect():
+        result = client.copy_ssh_key()
+        client.disconnect()
+        return result
+    return False, "Could not connect to host"
 
 
 if __name__ == "__main__":
