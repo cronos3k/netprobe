@@ -573,22 +573,26 @@ class SSHClient:
 def get_device_info(host: str, port: int, username: str, password: str, use_key: bool = False) -> Optional[Dict]:
     """Helper function to get device info via SSH"""
     client = SSHClient(host, port, username, password, use_key)
-    if client.connect():
-        info = client.get_system_info()
+    try:
+        if client.connect():
+            info = client.get_system_info()
+            return info
+        return None
+    finally:
         client.disconnect()
-        return info
-    return None
 
 
 def install_ssh_key(host: str, port: int, username: str, password: str) -> tuple:
     """Helper function to install SSH key on a remote host.
     Returns (success: bool, message: str)"""
     client = SSHClient(host, port, username, password, use_key=False)
-    if client.connect():
-        result = client.copy_ssh_key()
+    try:
+        if client.connect():
+            result = client.copy_ssh_key()
+            return result
+        return False, "Could not connect to host"
+    finally:
         client.disconnect()
-        return result
-    return False, "Could not connect to host"
 
 
 if __name__ == "__main__":

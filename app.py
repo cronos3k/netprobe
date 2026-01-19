@@ -528,12 +528,12 @@ def api_execute_command():
                 ssh_port = d['ssh_port']
                 break
 
+    client = None
     try:
         from ssh_client import SSHClient
         client = SSHClient(ip, ssh_port, credentials['username'], credentials['password'])
         if client.connect():
             output = client.execute(command)
-            client.disconnect()
             return jsonify({
                 'success': True,
                 'output': output,
@@ -543,6 +543,9 @@ def api_execute_command():
             return jsonify({'error': 'SSH connection failed'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        if client:
+            client.disconnect()
 
 
 if __name__ == '__main__':

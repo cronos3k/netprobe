@@ -287,23 +287,18 @@ def scan_network(do_ping_sweep: bool = True, progress_callback=None) -> Tuple[Li
     devices = []
     total = len(arp_entries)
 
-    # Parallel SSH checks and hostname lookups
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-        future_to_entry = {executor.submit(scan_device, entry): entry for entry in arp_entries}
+    # Sequential SSH checks and hostname lookups (one at a time to avoid connection exhaustion)
+    for completed, entry in enumerate(arp_entries, 1):
+        if progress_callback:
+            progress_callback(completed, total)
 
-        completed = 0
-        for future in concurrent.futures.as_completed(future_to_entry):
-            completed += 1
-            if progress_callback:
-                progress_callback(completed, total)
-
-            try:
-                result = future.result()
-                devices.append(result)
-                ssh_status = f"SSH:{result['ssh_port']}" if result['ssh_available'] else "No SSH"
-                print(f"  [{completed}/{total}] {result['ip']} - {result['hostname']} - {ssh_status}")
-            except Exception as e:
-                print(f"  Error scanning device: {e}")
+        try:
+            result = scan_device(entry)
+            devices.append(result)
+            ssh_status = f"SSH:{result['ssh_port']}" if result['ssh_available'] else "No SSH"
+            print(f"  [{completed}/{total}] {result['ip']} - {result['hostname']} - {ssh_status}")
+        except Exception as e:
+            print(f"  Error scanning device: {e}")
 
     # Sort by IP address
     devices.sort(key=lambda x: [int(p) for p in x['ip'].split('.')])
