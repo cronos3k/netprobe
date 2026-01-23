@@ -20,6 +20,7 @@ ENV/
 # Private data - NEVER commit these
 data.json
 ssh_keys/
+check_roan.py
 
 # OS files
 .DS_Store
