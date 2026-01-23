@@ -168,11 +168,13 @@ class SSHClient:
         try:
             _, stdout, _ = self.client.exec_command("uname -s", timeout=5)
             result = stdout.read().decode().strip()
+            # Close the channel to free up the session
+            stdout.channel.close()
             if result:
                 self.os_type = "linux"
             else:
                 self.os_type = "windows"
-        except:
+        except Exception:
             self.os_type = "unknown"
 
     def execute(self, command: str) -> str:
@@ -180,9 +182,11 @@ class SSHClient:
         if not self.client:
             return ""
         try:
-            _, stdout, stderr = self.client.exec_command(command, timeout=30)
+            stdin, stdout, stderr = self.client.exec_command(command, timeout=30)
             output = stdout.read().decode('utf-8', errors='ignore')
             error = stderr.read().decode('utf-8', errors='ignore')
+            # Close the channel to free up the session
+            stdout.channel.close()
             return output if output else error
         except Exception as e:
             return f"Error: {e}"
@@ -564,9 +568,19 @@ class SSHClient:
         return info
 
     def disconnect(self):
-        """Close SSH connection"""
+        """Close SSH connection and transport"""
         if self.client:
-            self.client.close()
+            try:
+                # Explicitly close the transport to ensure session is fully terminated
+                transport = self.client.get_transport()
+                if transport:
+                    transport.close()
+            except Exception:
+                pass
+            try:
+                self.client.close()
+            except Exception:
+                pass
             self.client = None
 
 
